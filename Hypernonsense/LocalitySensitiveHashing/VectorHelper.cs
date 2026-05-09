@@ -1,6 +1,6 @@
 ﻿using static System.Numerics.Tensors.TensorPrimitives;
 
-namespace Hypernonsense;
+namespace Hypernonsense.LocalitySensitiveHashing;
 
 internal static class VectorHelper
 {

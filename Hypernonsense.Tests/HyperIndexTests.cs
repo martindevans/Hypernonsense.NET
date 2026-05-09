@@ -1,4 +1,6 @@
-﻿namespace Hypernonsense.Tests;
+﻿using Hypernonsense.LocalitySensitiveHashing;
+
+namespace Hypernonsense.Tests;
 
 [TestClass]
 public sealed class HyperIndexTests
@@ -158,9 +160,9 @@ public sealed class HyperIndexTests
         idx.Add(42, v);
         idx.Remove(42, v);
 
-        var results = new List<int>();
+        var results = new List<(int, float)>();
         idx.Query(v, results);
-        CollectionAssert.DoesNotContain(results, 42);
+        CollectionAssert.DoesNotContain(results.Select(a => a.Item1).ToArray(), 42);
     }
 
     // -----------------------------------------------------------------------
@@ -226,9 +228,9 @@ public sealed class HyperIndexTests
         float[] v = [1f, 0f, 0f, 0f];
         idx.Add(5, v);
 
-        var results = new List<int>();
+        var results = new List<(int key, float similarity)>();
         idx.Query(v, results);
-        CollectionAssert.Contains(results, 5);
+        CollectionAssert.Contains(results.Select(a => a.key).ToArray(), 5);
     }
 
     [TestMethod]
@@ -236,9 +238,9 @@ public sealed class HyperIndexTests
     {
         var idx = new HyperIndex<int>(4, 4, 0);
         float[] v = [1f, 0f, 0f, 0f];
-        var results = new List<int>();
+        var results = new List<(int key, float similarity)>();
         idx.Query(v, results);
-        Assert.IsEmpty(results);
+        Assert.IsEmpty(results.Select(a => a.key).ToArray());
     }
 
     [TestMethod]
@@ -248,11 +250,11 @@ public sealed class HyperIndexTests
         float[] v = [1f, 0f, 0f, 0f];
         idx.Add(1, v);
 
-        var results = new List<int> { 999 };
+        var results = new List<(int key, float similarity)> { (999, 0f) };
         idx.Query(v, results);
 
-        CollectionAssert.Contains(results, 999);
-        CollectionAssert.Contains(results, 1);
+        CollectionAssert.Contains(results.Select(a => a.key).ToArray(), 999);
+        CollectionAssert.Contains(results.Select(a => a.key).ToArray(), 1);
     }
 
     [TestMethod]
@@ -264,12 +266,12 @@ public sealed class HyperIndexTests
         idx.Add(20, v);
         idx.Add(30, v);
 
-        var results = new List<int>();
+        var results = new List<(int key, float similarity)>();
         idx.Query(v, results);
 
-        CollectionAssert.Contains(results, 10);
-        CollectionAssert.Contains(results, 20);
-        CollectionAssert.Contains(results, 30);
+        CollectionAssert.Contains(results.Select(a => a.key).ToArray(), 10);
+        CollectionAssert.Contains(results.Select(a => a.key).ToArray(), 20);
+        CollectionAssert.Contains(results.Select(a => a.key).ToArray(), 30);
     }
 
     [TestMethod]
@@ -281,8 +283,8 @@ public sealed class HyperIndexTests
         float[] v = [0.6f, 0.8f, 0f, 0f];
         idx.Add("hello", v);
 
-        var results = new List<string>();
+        var results = new List<(string key, float similarity)>();
         idx.Query(v, results);
-        CollectionAssert.Contains(results, "hello");
+        CollectionAssert.Contains(results.Select(a => a.key).ToArray(), "hello");
     }
 }

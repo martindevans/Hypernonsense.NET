@@ -1,7 +1,7 @@
 ﻿using System.Numerics;
 using System.Numerics.Tensors;
 
-namespace Hypernonsense;
+namespace Hypernonsense.LocalitySensitiveHashing;
 
 /// <summary>
 /// A simple hyperindex
@@ -14,7 +14,7 @@ public class HyperIndex<TKey>
     public int Planes { get; }
 
     private readonly ReadOnlyMemory<float> _planes;
-    private readonly Dictionary<uint, List<TKey>> _clusters = new();
+    private readonly Dictionary<uint, List<TKey>> _clusters = [ ];
 
     /// <summary>
     /// How many vectors have been inserted
@@ -145,46 +145,98 @@ public class HyperIndex<TKey>
             output.AddRange(cluster);
     }
 
-    /// <summary>
-    /// Query the index, finding potential nearest vectors up to a soft max
-    /// </summary>
-    /// <param name="vector"></param>
-    /// <param name="output"></param>
-    /// <param name="max"></param>
-    public void Query(ReadOnlySpan<float> vector, List<TKey> output, int max = 128)
+    public void Query(ReadOnlySpan<float> vector, List<(TKey key, float similarity)> output, int max = 128)
     {
-        // What cluster should this be in
-        var key = Key(vector);
-        
-        // Find the nearest cluster
-        var near = NearestCluster(key);
+        var planesSpan = _planes.Span;
 
-        // Return all results in that cluster
-        if (_clusters.TryGetValue(near, out var cluster))
+        // compute dot products + bit signs
+        Span<(float confidence, int bit)> dots = stackalloc (float, int)[Planes];
+        for (var i = 0; i < Planes; i++)
         {
-            output.AddRange(cluster);
-            max -= cluster.Count;
+            var plane = planesSpan.Slice(i * Dimensions, Dimensions);
+            var d = TensorPrimitives.Dot(plane, vector);
+
+            dots[i] = (float.Abs(d), Convert.ToInt32(d > 0));
         }
+
+        // compute key
+        uint baseKey = 0;
+        for (var i = 0; i < Planes; i++)
+            baseKey = (baseKey << 1) | (uint)dots[i].bit;
+
+        // order bits by confidence (low |d| first)
+        var order = new int[Planes];
+        for (var i = 0; i < Planes; i++)
+            order[i] = i;
         
-        // Probe all adjacent clusters
-        if (max > 0)
+        for (var i = 0; i < Planes - 1; i++)
+            for (var j = i + 1; j < Planes; j++)
+                if (dots[order[j]].confidence < dots[order[i]].confidence)
+                    (order[i], order[j]) = (order[j], order[i]);
+
+        var seen = new HashSet<uint>();
+
+        var remaining = max;
+
+        // radius 0
+        TryAdd(baseKey, 1f);
+        if (remaining <= 0)
+            return;
+
+        // radius 1
+        for (var i = 0; i < Planes && remaining > 0; i++)
         {
-            for (var i = 0; i < Planes; i++)
+            var k1 = baseKey ^ (1u << order[i]);
+            TryAdd(k1, 0.5f);
+        }
+
+        if (remaining <= 0)
+            return;
+
+        // radius 2
+        for (var i = 0; i < Planes / 2 && remaining > 0; i++)
+        for (var j = i + 1; j < Planes / 2 && remaining > 0; j++)
+        {
+            var k2 = baseKey ^ (1u << order[i]) ^ (1u << order[j]);
+            TryAdd(k2, 0.25f);
+        }
+
+        if (remaining <= 0)
+            return;
+
+        // radius 3 (partial)
+        for (var i = 0; i < Planes / 2 && remaining > 0; i++)
+        for (var j = i + 1; j < Planes / 2 && remaining > 0; j++)
+        for (var k = j + 1; k < Planes / 2 && remaining > 0; k++)
+        {
+            var k3 = baseKey ^ (1u << order[i]) ^ (1u << order[j]) ^ (1u << order[k]);
+
+            TryAdd(k3, 0.125f);
+        }
+
+        return;
+
+        int AddByKey(uint key, float sim)
+        {
+            if (!seen.Add(key))
+                return 0;
+
+            if (_clusters.TryGetValue(key, out var cluster))
             {
-                // Flip a single bit in the key
-                var k = key ^ (1u << i);
-
-                // Ensure we don't add the "near" cluster twice
-                if (k == near)
-                    continue;
-
-                // Add all items in this cluster
-                if (_clusters.TryGetValue(k, out var ncluster))
-                {
-                    output.AddRange(ncluster);
-                    max -= ncluster.Count;
-                }
+                output.EnsureCapacity(output.Count + cluster.Count);
+                foreach (var item in cluster)
+                    output.Add((item, sim));
+                
+                return cluster.Count;
             }
+            return 0;
+        }
+
+        void TryAdd(uint key, float sim)
+        {
+            if (remaining <= 0)
+                return;
+            remaining -= AddByKey(key, sim);
         }
     }
 

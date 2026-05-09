@@ -1,4 +1,4 @@
-﻿namespace Hypernonsense;
+﻿namespace Hypernonsense.LocalitySensitiveHashing;
 
 public interface IVectorIndex<TKey>
 {
@@ -23,5 +23,5 @@ public interface IVectorIndex<TKey>
     /// <param name="vector"></param>
     /// <param name="output"></param>
     /// <param name="max"></param>
-    void Query(ReadOnlySpan<float> vector, List<TKey> output, int max = 128);
+    void Query(ReadOnlySpan<float> vector, List<(TKey key, float similarity)> output, int max = 128);
 }

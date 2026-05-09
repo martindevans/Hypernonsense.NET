@@ -1,5 +1,6 @@
 ﻿using System.Numerics.Tensors;
 using System.Text;
+using Hypernonsense.LocalitySensitiveHashing;
 
 namespace Hypernonsense.Tests;
 
@@ -51,7 +52,7 @@ public sealed class HyperIndexFuzzTests
         int Queries,
         int K);
 
-    private static FuzzStats RunFuzz(TestContext context, int dimensions, int planes, int seed, int corpusSize, int queryCount, int k, int maxCandidates = 128)
+    private static FuzzStats RunFuzz(int dimensions, int planes, int seed, int corpusSize, int queryCount, int k, int maxCandidates = 128)
     {
         var idx = new HyperIndex<int>(dimensions, planes, seed);
         var rng = new Random(seed);
@@ -75,14 +76,14 @@ public sealed class HyperIndexFuzzTests
             var query = RandomUnitVector(rng, dimensions);
             var groundTruth = BruteForceKnn(query, corpus, k);
 
-            var candidates = new List<int>();
+            var candidates = new List<(int, float)>();
             idx.Query(query, candidates, maxCandidates);
 
             totalCandidates += candidates.Count;
 
             foreach (var c in candidates)
             {
-                if (groundTruth.Contains(c))
+                if (groundTruth.Contains(c.Item1))
                     truePositives++;
                 else
                     falsePositives++;
@@ -112,11 +113,11 @@ public sealed class HyperIndexFuzzTests
 
     private static readonly Scenario[] Scenarios =
     [
-        new("small corpus,  low-dim, 8 planes",  Dimensions: 32,  Planes:  4, CorpusSize: 200,  QueryCount: 100, K: 5),
-        new("medium corpus, mid-dim, 8 planes",  Dimensions: 128, Planes:  4, CorpusSize: 1000, QueryCount: 200, K: 10),
-        new("medium corpus, mid-dim, 6 planes",  Dimensions: 128, Planes:  6, CorpusSize: 1000, QueryCount: 200, K: 10),
-        new("medium corpus, mid-dim, 8 planes",  Dimensions: 128, Planes:  8, CorpusSize: 1000, QueryCount: 200, K: 10),
-        new("large corpus,  high-dim, 1 planes", Dimensions: 256, Planes:  1, CorpusSize: 5000, QueryCount: 200, K: 20),
+        new("small corpus,  low-dim, 8 planes",  Dimensions: 32,  Planes:  8, CorpusSize: 5000, QueryCount: 200, K: 5),
+        new("medium corpus, mid-dim, 8 planes",  Dimensions: 128, Planes:  8, CorpusSize: 5000, QueryCount: 200, K: 10),
+        new("medium corpus, mid-dim, 12 planes", Dimensions: 128, Planes: 12, CorpusSize: 5000, QueryCount: 200, K: 10),
+        new("medium corpus, mid-dim, 16 planes", Dimensions: 128, Planes: 16, CorpusSize: 5000, QueryCount: 200, K: 10),
+        new("large corpus,  high-dim, 8 planes", Dimensions: 256, Planes: 8,  CorpusSize: 5000, QueryCount: 200, K: 20),
     ];
 
     // -----------------------------------------------------------------------
@@ -135,7 +136,7 @@ public sealed class HyperIndexFuzzTests
         var results = new List<(Scenario s, FuzzStats stats)>();
 
         foreach (var scenario in Scenarios)
-            results.Add((scenario, RunFuzz(TestContext!, scenario.Dimensions, scenario.Planes, seed, scenario.CorpusSize, scenario.QueryCount, scenario.K)));
+            results.Add((scenario, RunFuzz(scenario.Dimensions, scenario.Planes, seed, scenario.CorpusSize, scenario.QueryCount, scenario.K)));
 
         // ---- Print table --------------------------------------------------
         var sb = new StringBuilder();
@@ -160,24 +161,6 @@ public sealed class HyperIndexFuzzTests
         sb.AppendLine($"{"AVERAGE",-46} | {avgRecall,8:P1} | {avgPrecision,10:P1}");
 
         Console.WriteLine(sb.ToString());
-
-        //// ---- Assertions ---------------------------------------------------
-        //// Each individual scenario must meet a floor value
-        //foreach (var (s, stats) in results)
-        //{
-        //    Assert.IsGreaterThanOrEqualTo(
-        //        stats.Recall, 0.3,
-        //        $"Recall too low for scenario '{s.Label}': {stats.Recall:P1} (threshold 30 %)");
-        //    Assert.IsGreaterThanOrEqualTo(
-        //        stats.Precision, 0.1,
-        //        $"Precision too low for scenario '{s.Label}': {stats.Precision:P1} (threshold 10 %)");
-        //}
-
-        //// The aggregate average must be comfortable
-        //Assert.IsGreaterThanOrEqualTo(avgRecall, 0.5,
-        //    $"Average recall too low: {avgRecall:P1} (threshold 50 %)");
-        //Assert.IsGreaterThanOrEqualTo(avgPrecision, 0.15,
-        //    $"Average precision too low: {avgPrecision:P1} (threshold 15 %)");
     }
 
     public TestContext? TestContext { get; set; }

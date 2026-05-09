@@ -1,5 +1,6 @@
-﻿using System.Numerics.Tensors;
-using System.Text;
+﻿using System.Text;
+using Hypernonsense.LocalitySensitiveHashing;
+using static System.Numerics.Tensors.TensorPrimitives;
 
 namespace Hypernonsense.Tests;
 
@@ -12,7 +13,7 @@ public sealed class MultiIndexFuzzTests
         for (var i = 0; i < dimensions; i++)
             v[i] = rng.NextSingle() * 2 - 1;
 
-        TensorPrimitives.Divide(v, TensorPrimitives.Norm(v.AsSpan()), v);
+        Divide(v, Norm(v), v);
         return v;
     }
 
@@ -20,7 +21,7 @@ public sealed class MultiIndexFuzzTests
     {
         var scored = new List<(int id, float sim)>(corpus.Count);
         for (var i = 0; i < corpus.Count; i++)
-            scored.Add((i, TensorPrimitives.CosineSimilarity(query, corpus[i])));
+            scored.Add((i, CosineSimilarity(query, corpus[i])));
 
         scored.Sort((a, b) => b.sim.CompareTo(a.sim));
 
@@ -37,9 +38,7 @@ public sealed class MultiIndexFuzzTests
         int Planes,
         int Indices,
         int CorpusSize,
-        int QueryCount,
-        int K,
-        int MaxCandidates);
+        int K);
 
     private record struct FuzzStats(double Recall, double Precision, double AvgCandidates, int Queries, int K);
 
@@ -47,11 +46,11 @@ public sealed class MultiIndexFuzzTests
     public void FuzzPrecisionRecall()
     {
         var scenarios = new[]
-        {
-            new Scenario("small corpus, low-dim",  Dimensions:  64, Planes: 5, Indices: 4, CorpusSize: 1200, QueryCount: 120, K: 10, MaxCandidates: 128),
-            new Scenario("medium corpus, mid-dim", Dimensions: 128, Planes: 6, Indices: 6, CorpusSize: 2000, QueryCount: 140, K: 15, MaxCandidates: 160),
-            new Scenario("larger corpus, high-dim",Dimensions: 256, Planes: 7, Indices: 8, CorpusSize: 3000, QueryCount: 120, K: 20, MaxCandidates: 192),
-            new Scenario("larger corpus, high-dim",Dimensions: 256, Planes: 7, Indices: 16, CorpusSize: 3000, QueryCount: 120, K: 20, MaxCandidates: 192),
+        { 
+            new Scenario("larger corpus, high-dim, i=4 ", Dimensions: 256, Planes: 8, Indices: 4,  CorpusSize: 3000, K: 20),
+            new Scenario("larger corpus, high-dim, i=8 ", Dimensions: 256, Planes: 8, Indices: 8,  CorpusSize: 3000, K: 20),
+            new Scenario("larger corpus, high-dim, i=16", Dimensions: 256, Planes: 8, Indices: 16, CorpusSize: 3000, K: 20),
+            new Scenario("larger corpus, high-dim, i=32", Dimensions: 256, Planes: 8, Indices: 32, CorpusSize: 3000, K: 20),
         };
 
         const int seed = 424242;
@@ -74,31 +73,33 @@ public sealed class MultiIndexFuzzTests
             long falsePositives = 0;
             long totalCandidates = 0;
 
-            for (var q = 0; q < s.QueryCount; q++)
+            const int QueryCount = 128;
+            
+            for (var q = 0; q < QueryCount; q++)
             {
                 var query = RandomUnitVector(rng, s.Dimensions);
                 var truth = BruteForceKnn(query, corpus, s.K);
 
-                var candidates = new List<int>();
-                idx.Query(query, candidates, s.MaxCandidates);
+                var candidates = new List<(int key, float similarity)>();
+                idx.Query(query, candidates);
                 totalCandidates += candidates.Count;
 
                 foreach (var c in candidates)
                 {
-                    if (truth.Contains(c))
+                    if (truth.Contains(c.key))
                         truePositives++;
                     else
                         falsePositives++;
                 }
             }
 
-            var totalRelevant = (long)s.QueryCount * s.K;
+            var totalRelevant = (long)QueryCount * s.K;
             var recall = totalRelevant > 0 ? (double)truePositives / totalRelevant : 0;
             var retrieved = truePositives + falsePositives;
             var precision = retrieved > 0 ? (double)truePositives / retrieved : 0;
-            var avgCandidates = (double)totalCandidates / s.QueryCount;
+            var avgCandidates = (double)totalCandidates / QueryCount;
 
-            results.Add((s, new FuzzStats(recall, precision, avgCandidates, s.QueryCount, s.K)));
+            results.Add((s, new FuzzStats(recall, precision, avgCandidates, QueryCount, s.K)));
         }
 
         var sb = new StringBuilder();
