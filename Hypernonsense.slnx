@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Hypernonsense.Tests/Hypernonsense.Tests.csproj" Id="e1dc5ee5-8559-4835-94f1-bbf742020e3e" />
+  <Project Path="Hypernonsense/Hypernonsense.csproj" />
+</Solution>
