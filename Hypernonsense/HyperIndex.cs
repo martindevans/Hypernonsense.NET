@@ -97,8 +97,13 @@ public class HyperIndex<TKey>
         if (!_clusters.TryGetValue(clusterKey, out var cluster))
             return false;
 
-        Count--;
-        return cluster.Remove(id);
+        if (cluster.Remove(id))
+        {
+            Count--;
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -120,7 +125,10 @@ public class HyperIndex<TKey>
             var h = Hamming(key, queryKey);
 
             if (h < bestHamming)
+            {
                 bestKey = key;
+                bestHamming = h;
+            }
         }
 
         return bestKey;

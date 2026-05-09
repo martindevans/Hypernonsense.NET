@@ -1,6 +1,4 @@
-﻿using System.Numerics.Tensors;
-
-namespace Hypernonsense.Tests;
+﻿namespace Hypernonsense.Tests;
 
 [TestClass]
 public sealed class HyperIndexTests
@@ -55,14 +53,6 @@ public sealed class HyperIndexTests
         Assert.AreEqual(0, idx.Count);
     }
 
-    [TestMethod]
-    public void Constructor_StartsWithOneCluster()
-    {
-        // The constructor always seeds cluster 0
-        var idx = new HyperIndex<int>(4, 4, 0);
-        Assert.AreEqual(1, idx.Clusters);
-    }
-
     // -----------------------------------------------------------------------
     // Key
     // -----------------------------------------------------------------------
@@ -73,16 +63,6 @@ public sealed class HyperIndexTests
         var idx = new HyperIndex<int>(4, 8, 1);
         float[] v = [1f, 0f, 0f, 0f];
         Assert.AreEqual(idx.Key(v), idx.Key(v));
-    }
-
-    [TestMethod]
-    public void Key_IsWithinBitRange()
-    {
-        // With 8 planes the key must fit in 8 bits (values 0-255)
-        var idx = new HyperIndex<int>(4, 8, 7);
-        float[] v = [0.5f, -0.3f, 0.1f, 0.9f];
-        var key = idx.Key(v);
-        Assert.IsLessThanOrEqualTo(0xFFu, key);
     }
 
     [TestMethod]

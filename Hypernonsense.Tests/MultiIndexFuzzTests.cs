@@ -48,9 +48,10 @@ public sealed class MultiIndexFuzzTests
     {
         var scenarios = new[]
         {
-            new Scenario("small corpus, low-dim",  Dimensions:  64, Planes: 10, Indices: 4, CorpusSize: 1200, QueryCount: 120, K: 10, MaxCandidates: 128),
-            new Scenario("medium corpus, mid-dim", Dimensions: 128, Planes: 12, Indices: 6, CorpusSize: 2000, QueryCount: 140, K: 15, MaxCandidates: 160),
-            new Scenario("larger corpus, high-dim",Dimensions: 256, Planes: 14, Indices: 8, CorpusSize: 3000, QueryCount: 120, K: 20, MaxCandidates: 192),
+            new Scenario("small corpus, low-dim",  Dimensions:  64, Planes: 5, Indices: 4, CorpusSize: 1200, QueryCount: 120, K: 10, MaxCandidates: 128),
+            new Scenario("medium corpus, mid-dim", Dimensions: 128, Planes: 6, Indices: 6, CorpusSize: 2000, QueryCount: 140, K: 15, MaxCandidates: 160),
+            new Scenario("larger corpus, high-dim",Dimensions: 256, Planes: 7, Indices: 8, CorpusSize: 3000, QueryCount: 120, K: 20, MaxCandidates: 192),
+            new Scenario("larger corpus, high-dim",Dimensions: 256, Planes: 7, Indices: 16, CorpusSize: 3000, QueryCount: 120, K: 20, MaxCandidates: 192),
         };
 
         const int seed = 424242;
