@@ -8,10 +8,13 @@ namespace Hypernonsense.LocalitySensitiveHashing;
 public class MultiIndex<TKey>
     : IVectorIndex<TKey> where TKey : notnull
 {
+    public int Dimensions { get; }
+    
     private readonly List<HyperIndex<TKey>> _indices = [ ];
     
     public MultiIndex(int dimensions, int planes, int indices, int seed)
     {
+        Dimensions = dimensions;
         for (var i = 0; i < indices; i++)
             _indices.Add(new HyperIndex<TKey>(dimensions, planes, seed + i));
     }
@@ -42,10 +45,10 @@ public class MultiIndex<TKey>
             index.Query(vector, list, max * 2);
 
             // Increment counters (bigger increment if it's the exact right cluster)
-            foreach (var item in list)
+            foreach (var (key, similarity) in list)
             {
-                ref var counter = ref CollectionsMarshal.GetValueRefOrAddDefault(dict, item.key, out _);
-                counter += item.similarity;
+                ref var counter = ref CollectionsMarshal.GetValueRefOrAddDefault(dict, key, out _);
+                counter += similarity;
             }
         }
         

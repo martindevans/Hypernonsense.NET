@@ -3,6 +3,11 @@
 public interface IVectorIndex<TKey>
 {
     /// <summary>
+    /// How many dimensions are the vectors in this index
+    /// </summary>
+    public int Dimensions { get; }
+
+    /// <summary>
     /// Add a new vector to the index
     /// </summary>
     /// <param name="id"></param>

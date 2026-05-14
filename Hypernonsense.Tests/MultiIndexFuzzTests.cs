@@ -84,9 +84,9 @@ public sealed class MultiIndexFuzzTests
                 idx.Query(query, candidates);
                 totalCandidates += candidates.Count;
 
-                foreach (var c in candidates)
+                foreach (var (key, _) in candidates)
                 {
-                    if (truth.Contains(c.key))
+                    if (truth.Contains(key))
                         truePositives++;
                     else
                         falsePositives++;
