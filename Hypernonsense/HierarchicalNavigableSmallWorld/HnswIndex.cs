@@ -29,8 +29,11 @@ public class HnswIndex
         _db = db;
     }
 
-    public void Add(long id, ReadOnlySpan<float> vector)
+    public void Add(long vectorId, ReadOnlySpan<float> vector)
     {
+        if (vector.Length != Dimensions)
+            throw new ArgumentException($"Vector dimension {vector.Length} does not equal index dimension {Dimensions}", nameof(vector));
+        
         using var conn = _db.Create();
         
         // Ensure the database is initialised
@@ -40,10 +43,10 @@ public class HnswIndex
         var indexId = GetIndexId(conn);
         
         // Store the raw vector
-        StoreVector(conn, id, indexId, vector);
+        StoreVector(conn, vectorId, indexId, vector);
         
         // Decide which layer this vector will be inserted up to
-        var maxLayer = ChooseLayer(id);
+        var maxLayer = ChooseLayer(indexId, vectorId);
 
         // Query as normal, from top down. Keeping track of the descending links we follow
         Span<long> descenders = stackalloc long[LAYERS];
@@ -104,11 +107,20 @@ public class HnswIndex
                                                      """, new { IdxId = indexId, VecId = id }).ToList();
         
         // Delete the links involving this vector
+        conn.Execute("""
+                     DELETE FROM HnswLinks
+                     WHERE IndexId = @IdxId
+                     AND (SrcId = @VecId OR DstId = @VecId)
+                     """, new { IdxId = indexId, VecId = id });
+
+        // Delete the vector itself
         var deleted = conn.Execute("""
-                                   DELETE FROM HnswLinks
+                                   DELETE FROM HnswVectors
                                    WHERE IndexId = @IdxId
-                                   AND (SrcId = @VecId OR DstId = @VecId)
+                                   AND VectorId = @VecId
                                    """, new { IdxId = indexId, VecId = id });
+
+        // Early exit if nothing was deleted
         if (deleted == 0)
             return false;
         
@@ -163,20 +175,20 @@ public class HnswIndex
         );
     }
 
-    private static int ChooseLayer(long id)
+    private static int ChooseLayer(long indexId, long vectorId)
     {
         var layer = 0;
 
-        var x = (ulong)id;
+        // Init random state
+        var x = HashCode.Combine(indexId, vectorId);
+
         for (var i = 0; i < LAYERS; i++)
         {
-            // xorshift64*
-            x ^= x >> 12;
-            x ^= x << 25;
-            x ^= x >> 27;
+            // New random state
+            x = HashCode.Combine(x, i);
 
             // use lowest bit as a fair coin
-            if ((x & 1UL) == 0)
+            if ((x & 1) == 0)
                 break;
 
             layer++;
@@ -245,7 +257,7 @@ public class HnswIndex
 
     internal record HnswLayerNameMapping(string Name, long ID);
     internal record HnswVector(long IndexId, long VectorId, byte[] Data);
-    internal record HnswLayerLink(string IndexId, long LayerId, long SrcId, long DstId);
+    internal record HnswLayerLink(long IndexId, long LayerId, long SrcId, long DstId);
 }
 
 public interface IHnswDbConnectionFactory
