@@ -139,14 +139,72 @@ public class HnswIndex
     /// <param name="descenders"></param>
     private void Query(long indexId, ReadOnlySpan<float> vector, Span<long> descenders)
     {
-        // todo:
-        // 1. Start at the top layer, pick a random node
-        // 2. Check all links from current node, measuring similarity to query
-        // 3. Follow the link that leads to the most similar vertex
-        // 4. If none of the links are better than the current node, move "down" a layer (store descender)
-        // 5. goto 2
-        
-        throw new NotImplementedException();
+        descenders.Clear();
+
+        using var conn = _db.Create();
+
+        var vectors = conn.Query<HnswVector>(
+            """
+            SELECT * FROM HnswVectors
+            WHERE IndexId = @indexId
+            """,
+            new { indexId }
+        ).ToArray();
+        if (vectors.Length == 0)
+            return;
+
+        var similarities = new Dictionary<long, float>(vectors.Length);
+        foreach (var storedVector in vectors)
+        {
+            var storedData = MemoryMarshal.Cast<byte, Half>(storedVector.Data);
+            var dimensions = Math.Min(vector.Length, storedData.Length);
+
+            var similarity = 0f;
+            for (var i = 0; i < dimensions; i++)
+                similarity += vector[i] * (float)storedData[i];
+
+            similarities[storedVector.VectorId] = similarity;
+        }
+
+        var current = vectors[Random.Shared.Next(vectors.Length)].VectorId;
+        for (var layer = LAYERS - 1; layer >= 0; layer--)
+        {
+            while (true)
+            {
+                var bestNode = current;
+                similarities.TryGetValue(current, out var bestSimilarity);
+
+                var neighbours = conn.Query<long>(
+                    """
+                    SELECT CASE WHEN SrcId = @current THEN DstId ELSE SrcId END
+                    FROM HnswLinks
+                    WHERE IndexId = @indexId
+                    AND LayerId = @layer
+                    AND (SrcId = @current OR DstId = @current)
+                    """,
+                    new { indexId, layer, current }
+                );
+
+                foreach (var neighbour in neighbours)
+                {
+                    if (!similarities.TryGetValue(neighbour, out var candidateSimilarity))
+                        continue;
+
+                    if (candidateSimilarity > bestSimilarity)
+                    {
+                        bestNode = neighbour;
+                        bestSimilarity = candidateSimilarity;
+                    }
+                }
+
+                if (bestNode == current)
+                    break;
+
+                current = bestNode;
+            }
+
+            descenders[layer] = current;
+        }
     }
 
     private long GetIndexId(IDbConnection db)
